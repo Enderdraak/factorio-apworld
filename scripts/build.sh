@@ -5,7 +5,6 @@ set -e
 cd $(dirname $(dirname $0))
 
 CONFIG="$1"
-VERSION="$2"
 
 WORLD="factorio_$CONFIG"
 
@@ -37,7 +36,7 @@ GAME_NAME=$(PYTHONPATH="build/$WORLD" python3 -c "from config import game_name ;
 cat << EOF > "build/$WORLD/archipelago.json"
 {
     "game": "$GAME_NAME",
-    "world_version": "$VERSION",
+    "world_version": "0.0.0",
     "compatible_version": 7
 }
 EOF
