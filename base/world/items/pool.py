@@ -1,4 +1,7 @@
-from ...data.utils import upgrades_levels
+import collections
+
+from ...data.raw import technologies
+from ...data.utils import upgrades_levels, upgrades_map
 from ...utils import range_inclusive
 from .classification import is_progression
 
@@ -26,3 +29,15 @@ for name, levels in upgrades_levels.items():
         upgrades_default_count[name] = len(levels)
     else:
         upgrades_default_count[name] = len(levels) - 1
+
+
+# Recipe pool
+recipe_pool = collections.Counter()
+
+for technology in technologies:
+    # Ignore upgrades because it would make things messy
+    if technology.name in upgrades_map:
+        continue
+
+    for recipe_name in technology.unlocked_recipes:
+        recipe_pool[recipe_name] += 1

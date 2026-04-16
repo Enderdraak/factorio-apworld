@@ -1,3 +1,11 @@
+function string_starts_with(str, prefix)
+    return str:sub(1, #prefix) == prefix
+end
+
+function string_ends_with(str, suffix)
+    return str:sub(-#suffix) == suffix
+end
+
 function get_any_stack_size(name)
     local item = prototypes.item[name]
     if item ~= nil then

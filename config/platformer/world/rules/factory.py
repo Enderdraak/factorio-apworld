@@ -1,6 +1,6 @@
 from rule_builder.rules import Has, Rule
 
-from .classes import CanAutomate, CanCraft
+from .classes import CanAutomate, CanCraft, UnlockedRecipe
 from .factory_base import get_events_rules as base_get_events_rules, get_locations_rules
 
 
@@ -38,13 +38,16 @@ has_truster_and_propellants = (
 )
 
 
+# Oil stuff
+can_crack_oil = CanCraft('chemical-plant') & UnlockedRecipe('heavy-oil-cracking') & UnlockedRecipe('light-oil-cracking')
+can_burn_oil = CanCraft('chemical-plant') & UnlockedRecipe('solid-fuel-from-heavy-oil') & UnlockedRecipe('solid-fuel-from-light-oil')
+
+
 def get_events_rules() -> dict[str, Rule]:
     rules = base_get_events_rules()
 
-    # Advanced oil processing need to have storage tanks to mesure output levels
-    rules['Automate advanced-oil-processing on space-platform'] &= CanCraft('storage-tank')
-    rules['Automate heavy-oil-cracking on space-platform'] &= CanCraft('storage-tank')
-    rules['Automate light-oil-cracking on space-platform'] &= CanCraft('storage-tank')
+    # Advanced oil processing need to have storage tanks to mesure output levels and some way to deal with excess production
+    rules['Automate advanced-oil-processing on space-platform'] &= CanCraft('storage-tank') & (can_crack_oil | can_burn_oil)
 
     # Space location rules
     rules['Reach fulgora with space-platform'] &= can_destroy_medium_asterorid & has_truster_and_propellants

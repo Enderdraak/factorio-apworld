@@ -59,6 +59,46 @@ local queue_samples = function(force, name, count)
     end
 end
 
+local send_for_recipe = function(force, recipe_name)
+    if FREE_SAMPLES == 0 then
+        return
+    end
+
+    local recipe = prototypes.recipe[recipe_name]
+
+    for _, result in pairs(recipe.products) do
+        if result.type == "item" and result.amount then
+            local name = result.name
+            if FREE_SAMPLE_BLACKLIST[name] ~= 1 then
+                local count
+                if FREE_SAMPLES == 1 then
+                    count = result.amount
+                else
+                    count = get_any_stack_size(result.name)
+                    if FREE_SAMPLES == 2 then
+                        count = math.ceil(count / 2)
+                    end
+                end
+                queue_samples(force, name, count)
+            end
+        end
+    end
+end
+
+local send_for_technology = function(force, technology_name)
+    if FREE_SAMPLES == 0 then
+        return
+    end
+
+    local technology = prototypes.technology[technology_name]
+
+    for _, effect in pairs(technology.effects) do
+        if effect.type == "unlock-recipe" then
+            send_for_recipe(force, effect.recipe)
+        end
+    end
+end
+
 local on_surface_created = function(event)
     local surface = game.surfaces[event.surface_index]
     local platform = surface.platform
@@ -94,47 +134,6 @@ local on_space_platform_built_tile = function(event)
     send_items(event.platform)
 end
 
-
-local on_research_finished = function(event)
-    local technology = event.research
-    if string.find(technology.force.name, "EE_TESTFORCE") == 1 then
-        --Don't acknowledge AP research as an Editor Extensions test force
-        --Also no need for free samples in the Editor extensions testing surfaces, as these testing surfaces
-        --are worked on exclusively in editor mode.
-        return
-    end
-    if technology.researched and string.find(technology.name, "ap%-") ~= 1 then
-        if FREE_SAMPLES == 0 then
-            return  -- Nothing else to do
-        end
-        if not technology.prototype.effects then
-            return  -- No technology effects, so nothing to do.
-        end
-        for _, effect in pairs(technology.prototype.effects) do
-            if effect.type == "unlock-recipe" then
-                local recipe = prototypes.recipe[effect.recipe]
-                for _, result in pairs(recipe.products) do
-                    if result.type == "item" and result.amount then
-                        local name = result.name
-                        if FREE_SAMPLE_BLACKLIST[name] ~= 1 then
-                            local count
-                            if FREE_SAMPLES == 1 then
-                                count = result.amount
-                            else
-                                count = get_any_stack_size(result.name)
-                                if FREE_SAMPLES == 2 then
-                                    count = math.ceil(count / 2)
-                                end
-                            end
-                            queue_samples(technology.force, name, count)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
 local on_init = function ()
     -- Free samples waiting to be sent by platform
     storage.free_samples = {
@@ -154,6 +153,9 @@ return {
         [defines.events.on_surface_deleted] = on_surface_deleted,
         [defines.events.on_space_platform_built_entity] = on_space_platform_built_entity,
         [defines.events.on_space_platform_built_tile] = on_space_platform_built_tile,
-        [defines.events.on_research_finished] = on_research_finished,
+    },
+    interface = {
+        send_for_recipe = send_for_recipe,
+        send_for_technology = send_for_technology,
     },
 }

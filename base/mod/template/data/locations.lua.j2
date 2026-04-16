@@ -1,0 +1,111 @@
+{% from "macros.lua" import variable_to_lua -%}
+
+local technologies = data.raw["technology"]
+local new_tree_copy
+
+local template_tech = table.deepcopy(technologies["automation"])
+
+template_tech.unlocks = {}
+template_tech.upgrade = false
+template_tech.effects = {}
+template_tech.prerequisites = {}
+
+local copy_icons = function(source, destination)
+    if source.icon or source.icons then
+        destination.icon = table.deepcopy(source.icon)
+        destination.icon_size = table.deepcopy(source.icon_size)
+        destination.icons = table.deepcopy(source.icons)
+
+        return true
+    end
+
+    return false
+end
+
+local set_icon = function(technology, item_name, important)
+    if item_name then
+        if string_ends_with(item_name, " recipe") then
+            local source_recipe = data.raw["recipe"][item_name:sub(0, -8)]
+
+            if source_recipe then
+                if copy_icons(source_recipe, technology) then
+                    return
+                end
+
+                local product
+                if source_recipe.main_product then
+                    product = source_recipe.main_product
+                elseif source_recipe.results and source_recipe.results[1] then
+                    product = source_recipe.results[1].name
+                end
+
+                if product then
+                    for item_type, _ in pairs(defines.prototypes["item"]) do
+                        if data.raw[item_type] then
+                            local source_item = data.raw[item_type][product]
+                            if source_item then
+                                if copy_icons(source_item, technology) then
+                                    return
+                                end
+                            end
+                        end
+                    end
+
+                    local source_fluid = data.raw["fluid"][product]
+                    if source_fluid then
+                        if copy_icons(source_fluid, technology) then
+                            return
+                        end
+                    end
+                end
+            end
+        else
+            local source_technology = data.raw["technology"][item_name]
+            if source_technology then
+                if copy_icons(source_technology, technology) then
+                    return
+                end
+            end
+        end
+    end
+
+    if important then
+        technology.icon = "__{{ mod_name }}__/graphics/icons/ap.png"
+        technology.icons = nil
+        technology.icon_size = 128
+    else
+        technology.icon = "__{{ mod_name }}__/graphics/icons/ap_unimportant.png"
+        technology.icons = nil
+        technology.icon_size = 128
+    end
+end
+
+{% for location, item in locations %}
+new_tree_copy = table.deepcopy(template_tech)
+new_tree_copy.name = "{{ location.id }}"
+{%- if tech_tree_information == 2 %}
+new_tree_copy.localised_name = {"technology-name.ap-technology-full", "{{ item.player_name }}", "{{ item.name }}", "{{ location.name }}"}
+new_tree_copy.localised_description = {"technology-description.ap-technology-full", "{{ item.name }}", "{{ item.player_name }}", {% if item.advancement %}{"technology-description.ap-technology-item-advancement"}{% elif item.useful %}{"technology-description.ap-technology-item-useful"}{% elif item.trap %}{"technology-description.ap-technology-item-trap"}{% else %}""{% endif %}}
+{%- else  %}
+new_tree_copy.localised_name = {"technology-name.ap-technology-hidden", "{{location.name}}"}
+new_tree_copy.localised_description = {"technology-description.ap-technology-hidden", {% if item.advancement %}{"technology-description.ap-technology-item-advancement"}{% else %}""{% endif %}}
+{%- endif %}
+{%- if location.unit is not none %}
+new_tree_copy.unit.count = {{ location.unit.count }}
+new_tree_copy.unit.ingredients = {{ variable_to_lua(location.unit.ingredients) }}
+{%- else %}
+new_tree_copy.unit = nil
+{%- endif %}
+{%- if location.research_trigger is not none %}
+new_tree_copy.research_trigger = {{ variable_to_lua(location.research_trigger) }}
+{%- endif %}
+set_icon(new_tree_copy, {% if item.name %}{% if item.name in progressive_items %}"{{ progressive_items[item.name][0] }}"{% else %}"{{ item.name }}"{% endif %}{% else %}nil{% endif %}, {{ variable_to_lua(item.advancement) }})
+{#- connect Technology  #}
+{%- if location in tech_tree_layout_prerequisites %}
+{%- for prerequisite in tech_tree_layout_prerequisites[location] %}
+table.insert(new_tree_copy.prerequisites, "ap-{{ prerequisite.address }}-")
+{% endfor %}
+{% endif -%}
+{#- add new Technology to game #}
+data:extend{new_tree_copy}
+{% endfor %}

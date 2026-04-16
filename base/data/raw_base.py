@@ -185,10 +185,8 @@ for technology_name, technology_data in get_data('technology'):
 
     technologies.add(technology)
 
-technologies_required_for_research = set() # Will be placed on craftsanity
-technologies_required_for_automation = set() # Will be placed on early science locations
 
-
+# Items
 _item_types = [
     'item',
     'ammo',

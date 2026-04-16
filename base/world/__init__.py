@@ -4,8 +4,8 @@ from BaseClasses import CollectionState, Item, Region
 from rule_builder.rules import Has
 from worlds.AutoWorld import World
 
-from ..config import game_name, progressive_technologies
-from ..data.raw import science_packs, space_locations, surfaces, surfaces_accessible_at_start, technologies, technologies_required_for_automation, technologies_required_for_research
+from ..config import game_name, progressive_items_with_split_technologies, progressive_items_without_split_technologies, items_required_for_automation, items_required_for_research
+from ..data.raw import science_packs, space_locations, surfaces, surfaces_accessible_at_start, technologies
 from ..data.utils import craftable_recipes
 from .items.classes import FactorioItem
 from .items.ids import item_ids
@@ -21,17 +21,23 @@ class FactorioWorld(World):
     options_dataclass = FactorioOptions
     options: FactorioOptions
 
-    progressive_levels: dict[str, list[str]]
+    progressive_items: dict[str, list[str]]
 
     def __init__(self, multiworld, player: int):
         super().__init__(multiworld, player)
 
     def generate_early(self) -> None:
-        self.progressive_levels = {}
+        self.options.apply_required_adjustments()
+
+        self.progressive_items = {}
 
         if self.options.progressive:
-            self.progressive_levels['progressive science-pack'] = science_packs
-            self.progressive_levels.update(progressive_technologies)
+            if self.options.split_technologies:
+                self.progressive_items['progressive science-pack'] = [f'{science_pack} recipe' for science_pack in science_packs]
+                self.progressive_items.update(progressive_items_with_split_technologies)
+            else:
+                self.progressive_items['progressive science-pack'] = science_packs
+                self.progressive_items.update(progressive_items_without_split_technologies)
 
     def create_regions(self) -> None:
         from .items.factory import get_item_count
@@ -69,24 +75,26 @@ class FactorioWorld(World):
         from .items.factory import create_items
 
         progressive_counts = collections.Counter()
+        items_for_automation = items_required_for_automation(self.options)
+        items_for_research = items_required_for_research(self.options)
 
-        for item in create_items(self.options, self.progressive_levels, self.player):
-            if item.name in self.progressive_levels:
-                technology_name = self.progressive_levels[item.name][progressive_counts[item.name]]
+        for item in create_items(self.options, self.progressive_items, self.player):
+            if item.name in self.progressive_items:
+                item_name = self.progressive_items[item.name][progressive_counts[item.name]]
 
                 progressive_counts[item.name] += 1
             else:
-                technology_name = item.name
+                item_name = item.name
 
-            if technology_name in technologies_required_for_automation:
+            if item_name in items_for_automation:
                 # Early science locations are always placed at the start
                 for location in self.get_locations():
                     if isinstance(location, FactorioScienceLocation) and location.item is None:
-                        location.count = min(location.count, technologies[technology_name].unit_count)
+                        location.count = min(location.count, technologies[item_name].unit_count if item_name in technologies else 10)
                         location.place_locked_item(item)
 
                         break
-            elif technology_name in technologies_required_for_research:
+            elif item_name in items_for_research:
                 # Early craft locations are always placed at the start
                 for location in self.get_locations():
                     if isinstance(location, FactorioCraftLocation) and location.item is None:
@@ -114,13 +122,13 @@ class FactorioWorld(World):
     def create_item(self, name: str) -> FactorioItem:
         from .items.factory import create_item
 
-        return create_item(self.progressive_levels, self.player, name)
+        return create_item(self.options, self.progressive_items, self.player, name)
 
     def collect(self, state: CollectionState, item: Item) -> bool:
         if super().collect(state, item):
-            if item.name in self.progressive_levels:
+            if item.name in self.progressive_items:
                 current_count = state.prog_items[self.player][item.name]
-                item_name = self.progressive_levels[item.name][current_count - 1]
+                item_name = self.progressive_items[item.name][current_count - 1]
                 state.prog_items[self.player][item_name] = 1
 
             return True
@@ -129,9 +137,9 @@ class FactorioWorld(World):
 
     def remove(self, state: CollectionState, item: Item) -> bool:
         if super().collect(state, item):
-            if item.name in self.progressive_levels:
+            if item.name in self.progressive_items:
                 current_count = state.prog_items[self.player][item.name]
-                item_name = self.progressive_levels[item.name][current_count]
+                item_name = self.progressive_items[item.name][current_count]
                 state.prog_items[self.player][item_name] = 0
 
             return True

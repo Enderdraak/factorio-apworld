@@ -129,110 +129,6 @@ commands.add_command("ap-print", "Used by the Archipelago client to print messag
     game.print(call.parameter)
 end)
 
-TRAP_TABLE = {
-["Attack Trap"] = function ()
-    game.surfaces["nauvis"].build_enemy_base(game.forces["player"].get_spawn_position(game.get_surface(1)), 25)
-end,
-["Evolution Trap"] = function ()
-    local new_factor = game.forces["enemy"].get_evolution_factor("nauvis") +
-        (TRAP_EVO_FACTOR * (1 - game.forces["enemy"].get_evolution_factor("nauvis")))
-    game.forces["enemy"].set_evolution_factor(new_factor, "nauvis")
-    game.print({"", "New evolution factor:", new_factor})
-end,
-["Teleport Trap"] = function()
-    for _, player in ipairs(game.forces["player"].players) do
-        if player.character then
-            attempt_teleport_player(player, 1)
-        end
-    end
-end,
-["Grenade Trap"] = function ()
-    fire_entity_at_players("grenade", 0.1)
-end,
-["Cluster Grenade Trap"] = function ()
-    fire_entity_at_players("cluster-grenade", 0.1)
-end,
-["Artillery Trap"] = function ()
-    fire_entity_at_players("artillery-projectile", 1)
-end,
-["Atomic Rocket Trap"] = function ()
-    fire_entity_at_players("atomic-rocket", 0.1)
-end,
-["Atomic Cliff Remover Trap"] = function ()
-    local cliffs = game.surfaces["nauvis"].find_entities_filtered{type = "cliff"}
-
-    if #cliffs > 0 then
-        fire_entity_at_entities("atomic-rocket", {cliffs[math.random(#cliffs)]}, 0.1)
-    end
-end,
-["Inventory Spill Trap"] = function ()
-    for _, player in ipairs(game.forces["player"].players) do
-        spill_character_inventory(player.character)
-    end
-end,
-}
-
-commands.add_command("ap-get-technology", "Grant a technology, used by the Archipelago Client.", function(call)
-    if storage.index_sync == nil then
-        storage.index_sync = {}
-    end
-    local tech
-    local force = game.forces["player"]
-    if call.parameter == nil then
-        game.print("ap-get-technology is only to be used by the Archipelago Factorio Client")
-        return
-    end
-    chunks = split(call.parameter, "\t")
-    local item_name = chunks[1]
-    local index = chunks[2]
-    local source = chunks[3] or "Archipelago"
-    if index == nil then
-        game.print("ap-get-technology is only to be used by the Archipelago Factorio Client")
-        return
-    elseif index == -1 then -- for coop sync and restoring from an older savegame
-        tech = force.technologies[item_name]
-        if tech.researched ~= true then
-            game.print({"", "Received [technology=" .. tech.name .. "] as it is already checked."})
-            game.play_sound({path="utility/research_completed"})
-            tech.researched = true
-        end
-        return
-    elseif progressive_technologies[item_name] ~= nil then
-        if storage.index_sync[index] ~= item_name then -- not yet received prog item
-            storage.index_sync[index] = item_name
-            local tech_stack = progressive_technologies[item_name]
-            for _, item_name in ipairs(tech_stack) do
-                tech = force.technologies[item_name]
-                if tech.researched ~= true then
-                    game.print({"", "Received [technology=" .. tech.name .. "] from ", source})
-                    game.play_sound({path="utility/research_completed"})
-                    tech.researched = true
-                    return
-                end
-            end
-        end
-    elseif force.technologies[item_name] ~= nil then
-        tech = force.technologies[item_name]
-        if tech ~= nil then
-            storage.index_sync[index] = tech
-            if tech.researched ~= true then
-                game.print({"", "Received [technology=" .. tech.name .. "] from ", source})
-                game.play_sound({path="utility/research_completed"})
-                tech.researched = true
-            end
-        end
-    elseif TRAP_TABLE[item_name] ~= nil then
-        if storage.index_sync[index] ~= item_name then -- not yet received trap
-            storage.index_sync[index] = item_name
-            game.print({"", "Received ", item_name, " from ", source})
-            TRAP_TABLE[item_name]()
-        end
-    else
-        game.print("Unknown Item " .. item_name)
-    end
-end)
-
-
 commands.add_command("ap-rcon-info", "Used by the Archipelago client to get information", function(call)
     rcon.print(helpers.table_to_json({
         ["slot_name"] = SLOT_NAME,
@@ -266,8 +162,9 @@ commands.add_command("toggle-ap-chat", "Toggle sending of chat messages from pla
 end)
 
 -- data
-progressive_technologies = {{ dict_to_lua(progressive_technology_table) }}
+PROGRESSIVE_ITEMS = {{ dict_to_lua(progressive_items) }}
 
+-- handlers
 local handler = require("event_handler")
 handler.add_lib(lib)
 handler.add_lib(require("script/death_link"))
@@ -275,4 +172,5 @@ handler.add_lib(require("script/death_link"))
 handler.add_lib(require("script/energy_link"))
 {% endif %}
 handler.add_lib(require("script/free_samples"))
+handler.add_lib(require("script/receive"))
 handler.add_lib(require("script/victory"))

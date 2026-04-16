@@ -4,8 +4,8 @@ from schema import Schema, Optional, And, Or, SchemaError
 
 from Options import Choice, DefaultOnToggle, OptionCounter, OptionDict, OptionSet, PerGameCommonOptions, Range, Toggle, Visibility
 
-from ..config import craftsanity_filter, victory_conditions
-from ..data.raw import items, science_packs, technologies_required_for_research
+from ..config import craftsanity_filter, items_required_for_automation, victory_conditions
+from ..data.raw import items, science_packs
 from .items.pool import upgrades_default_count, upgrades_min_count, upgrades_max_count
 from .locations import craftsanity_item_pool
 
@@ -124,11 +124,17 @@ if len(victory_conditions) == 1:
 
 class CraftSanity(Range):
     """Choose a number of researches to require crafting a specific item rather than with science packs.
+    May be increased to add technologies/recipes needed for the first science pack
     May be capped based on the total number of locations."""
     display_name = "CraftSanity"
-    default = len(technologies_required_for_research)
-    range_start = len(technologies_required_for_research)
+    default = 0
+    range_start = 0
     range_end = len(craftsanity_item_pool)
+
+
+class SplitTechnologies(Toggle):
+    """Split technologies into individual recipes instead of awarding them as a whole"""
+    display_name = "Split technologies"
 
 
 class Progressive(DefaultOnToggle):
@@ -293,6 +299,7 @@ class FactorioOptions(PerGameCommonOptions):
     tech_tree_information: TechTreeInformation
     goal: Goal
     craftsanity: CraftSanity
+    split_technologies: SplitTechnologies
     progressive: Progressive
     upgrades_count: FactorioUpgradesCount
     starting_items: FactorioStartItems
@@ -301,3 +308,6 @@ class FactorioOptions(PerGameCommonOptions):
     free_sample_blacklist: FactorioFreeSampleBlacklist
     free_sample_whitelist: FactorioFreeSampleWhitelist
     world_gen: WorldGen
+
+    def apply_required_adjustments(self):
+        self.craftsanity.value = max(self.craftsanity.value, len(items_required_for_automation(self)))

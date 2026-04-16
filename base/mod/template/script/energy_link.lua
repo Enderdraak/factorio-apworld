@@ -49,10 +49,6 @@ local on_check_energy_link = function(event)
     end
 end
 
-local string_starts_with = function(str, start)
-    return str:sub(1, #start) == start
-end
-
 local validate_energy_link_bridge = function(unit_number, entity)
     if not entity then
         if storage.energy_link_bridges[unit_number] == nil then return false end

@@ -4,8 +4,8 @@ import typing
 
 from BaseClasses import Location, Region
 
-from ..config import craftsanity_filter, game_name
-from ..data.raw import items, technologies_required_for_automation, technologies_required_for_research, science_packs
+from ..config import craftsanity_filter, game_name, items_required_for_automation, items_required_for_research
+from ..data.raw import items, science_packs
 from ..data.utils import craftable_items, craftable_items_at_start
 
 if typing.TYPE_CHECKING:
@@ -91,8 +91,8 @@ class FactorioCraftLocation(FactorioLocation):
 
 
 def get_locations(options: FactorioOptions, random: random.Random, locations_to_create: int) -> list[FactorioLocation]:
-    early_craftsanity_count = len(technologies_required_for_research)
-    early_science_location_count = len(technologies_required_for_automation)
+    early_craftsanity_count = len(items_required_for_research(options))
+    early_science_location_count = len(items_required_for_automation(options))
     craftsanity_count = min(options.craftsanity.value - early_craftsanity_count, locations_to_create - early_craftsanity_count - early_science_location_count)
     science_location_count = locations_to_create - early_craftsanity_count - early_science_location_count - craftsanity_count
 

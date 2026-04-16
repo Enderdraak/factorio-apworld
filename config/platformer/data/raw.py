@@ -30,10 +30,6 @@ machines_available_at_start.add('electric-furnace')
 recipes_unlocked_at_start.update(technologies['space-platform'].unlocked_recipes)
 del technologies['space-platform']
 
-# Early technologies
-technologies_required_for_research.update({'automation-science-pack', 'electronics'})
-technologies_required_for_automation.update({'automation', 'engine', 'logistics', 'solar-energy', 'steel-processing'})
-
 # Removed technologies
 _removed_technologies = [
     # Technologies explicitely removed by platformer
@@ -143,6 +139,20 @@ _useless_technologies = [
 
 for technology_name in _useless_technologies:
     technologies[technology_name].modifiers = []
+
+# Make modules non-upgrades
+technologies['efficiency-module'].upgrade = False
+technologies['efficiency-module-2'].upgrade = False
+technologies['efficiency-module-3'].upgrade = False
+technologies['productivity-module'].upgrade = False
+technologies['productivity-module-2'].upgrade = False
+technologies['productivity-module-3'].upgrade = False
+technologies['quality-module'].upgrade = False
+technologies['quality-module-2'].upgrade = False
+technologies['quality-module-3'].upgrade = False
+technologies['speed-module'].upgrade = False
+technologies['speed-module-2'].upgrade = False
+technologies['speed-module-3'].upgrade = False
 
 # Cap productivity infine techs
 technologies['asteroid-productivity'].max_level = 30
