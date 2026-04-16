@@ -111,12 +111,28 @@ class FactorioWorld(World):
     def create_item(self, name: str) -> FactorioItem:
         return create_item(self.progressive_levels, self.player, name)
 
+    def get_filler_item_name(self) -> str:
+        from .items.pool import upgrades_max_count
+
+        filler_item_pool = [name for name, max_count in upgrades_max_count.items() if max_count is None]
+
+        if len(filler_item_pool) == 0:
+            filler_item_pool = upgrades_max_count.keys()
+
+        return self.random.choice(filler_item_pool)
+
+    def collect_item(self, state: CollectionState, item: Item, remove: bool = False) -> str | None:
+        if item.advancement or item.name in self.progressive_levels:
+            return item.name
+
+        return None
+
     def collect(self, state: CollectionState, item: Item) -> bool:
         if super().collect(state, item):
             if item.name in self.progressive_levels:
-                current_count = state.prog_items[self.player][item.name]
-                item_name = self.progressive_levels[item.name][current_count - 1]
-                state.prog_items[self.player][item_name] = 1
+                level = state.prog_items[self.player][item.name]
+                if level <= len(self.progressive_levels[item.name]):
+                    state.prog_items[self.player][self.progressive_levels[item.name][level - 1]] += 1
 
             return True
 
@@ -125,9 +141,9 @@ class FactorioWorld(World):
     def remove(self, state: CollectionState, item: Item) -> bool:
         if super().collect(state, item):
             if item.name in self.progressive_levels:
-                current_count = state.prog_items[self.player][item.name]
-                item_name = self.progressive_levels[item.name][current_count]
-                state.prog_items[self.player][item_name] = 0
+                level = state.prog_items[self.player][item.name] + 1
+                if level <= len(self.progressive_levels[item.name]):
+                    state.prog_items[self.player][self.progressive_levels[item.name][level - 1]] -= 1
 
             return True
 
