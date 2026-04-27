@@ -3,7 +3,11 @@ from ...data.utils import upgrades_levels, upgrades_map
 
 
 def _has_advancement_modifier(technology) -> bool:
-    return len(technology.unlocked_recipes) > 0 or len(technology.unlocked_space_locations) > 0
+    return any((
+        len(technology.unlocked_recipes) > 0,
+        len(technology.unlocked_space_locations) > 0,
+        'mining-with-fluid' in technology.modifiers,
+    ))
 
 
 def is_advancement(name: str, index: int = 0, split_technologies: bool | None = None) -> bool:

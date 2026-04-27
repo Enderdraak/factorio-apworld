@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from importlib import resources
 from json import loads as json_loads
 
-from .classes import Machine, Recipe, SpaceLocation, Surface, SurfaceCondition, Table, Technology
+from .classes import GatherableResource, Machine, MinableResource, PumpableResource, Recipe, SpaceLocation, Surface, SurfaceCondition, Table, Technology
 
 
 # Raw data
@@ -42,6 +42,28 @@ def get_prototype(type: str, name: str) -> dict|None:
     return None
 
 
+# Utility parsing functions
+def parse_product_protoype_array(product_prototypes: list) -> dict[str, int|float]:
+    result = {}
+
+    for product_prototype in product_prototypes:
+        if 'amount' in product_prototype:
+            amount = product_prototype['amount']
+        else:
+            amount = (product_prototype['amount_min'] + product_prototype['amount_max']) / 2
+
+        amount *= product_prototype.get('probability', 1)
+
+        amount += product_prototype.get('extra_count_fraction', 0)
+
+        result[product_prototype['name']] = amount
+
+    return result
+
+def parse_surface_condition_array(surface_conditions: list) -> list[SurfaceCondition]:
+    return [SurfaceCondition(surface_condition['property'], surface_condition.get('min'), surface_condition.get('max')) for surface_condition in surface_conditions]
+
+
 # Surfaces
 surfaces = Table()
 surfaces_accessible_at_start = {'nauvis'}
@@ -50,7 +72,34 @@ for prototype in get_prototypes('surface'):
     surfaces.add(Surface(prototype['name'], prototype['surface_properties']))
 
 for prototype in get_prototypes('planet'):
-    surfaces.add(Surface(prototype['name'], prototype['surface_properties']))
+    resources = []
+
+    for tile_name in prototype['map_gen_settings']['autoplace_settings']['tile']['settings'].keys():
+        tile_data = get_prototype('tile', tile_name)
+        tile_fluid = tile_data.get('fluid')
+
+        if tile_fluid is not None:
+            resources.append(PumpableResource(tile_name, tile_fluid))
+
+    for entity_name in prototype['map_gen_settings']['autoplace_settings']['entity']['settings'].keys():
+        entity_data = get_prototype('entity', entity_name)
+
+        if 'minable' not in entity_data:
+            continue
+
+        minable_data = entity_data['minable']
+
+        if 'results' in minable_data:
+            results = parse_product_protoype_array(minable_data['results'])
+        else:
+            results = {minable_data['result']: minable_data.get('count', 1)}
+
+        if entity_data['type'] == 'resource':
+            resources.append(MinableResource(entity_name, entity_data.get('category', 'basic-solid'), results, minable_data.get('required_fluid')))
+        else:
+            resources.append(GatherableResource(entity_name, results))
+
+    surfaces.add(Surface(prototype['name'], prototype['surface_properties'], resources))
 
 
 # Space locations
@@ -84,9 +133,15 @@ for prototype in get_prototypes('space-location'):
         else:
             asteroid_chunks.update(_recursive_asteroid_to_chunks(asteroid_spawn_definition['asteroid']))
 
+    asteroid_chunks_results = set()
+    for asteroid_chunk in asteroid_chunks:
+        asteroid_chunk_data = get_prototype('asteroid-chunk', asteroid_chunk)
+        if 'minable' in asteroid_chunk_data:
+            asteroid_chunks_results.add(asteroid_chunk_data['minable']['result'])
+
     space_locations.add(SpaceLocation(
         name=prototype['name'],
-        asteroid_chunks=asteroid_chunks,
+        asteroid_chunks=asteroid_chunks_results,
         unlocked_at_start=prototype['name'] == 'nauvis',
         accessible_at_start=prototype['name'] == 'nauvis',
     ))
@@ -99,81 +154,62 @@ for prototype in get_prototypes('space-connection'):
 # Machines
 machines = Table()
 
-for prototype in get_prototypes('assembling-machine'):
+for prototype in get_prototypes('character'):
     machines.add(Machine(
         prototype['name'],
+        [],
         set(prototype['crafting_categories']),
-        [SurfaceCondition.from_data(surface_condition) for surface_condition in prototype.get('surface_conditions', [])],
+        set(prototype['mining_categories']),
+    ))
+
+for prototype in get_prototypes('crafting-machine'):
+    machines.add(Machine(
+        prototype['name'],
+        parse_surface_condition_array(prototype.get('surface_conditions', [])),
+        set(prototype['crafting_categories']),
+    ))
+
+for prototype in get_prototypes('mining-drill'):
+    machines.add(Machine(
+        prototype['name'],
+        parse_surface_condition_array(prototype.get('surface_conditions', [])),
+        set(),
+        set(prototype['resource_categories']),
+    ))
+
+for prototype in get_prototypes('offshore-pump'):
+    machines.add(Machine(
+        prototype['name'],
+        parse_surface_condition_array(prototype.get('surface_conditions', [])),
+        is_offshore_pump=True,
     ))
 
 for prototype in get_prototypes('asteroid-collector'):
     machines.add(Machine(
         prototype['name'],
-        {'asteroid-chunk'},
-        [SurfaceCondition.from_data(surface_condition) for surface_condition in prototype.get('surface_conditions', [])],
+        parse_surface_condition_array(prototype.get('surface_conditions', [])),
+        is_asteroid_collector=True,
     ))
 
-for prototype in get_prototypes('character'):
-    machines.add(Machine(prototype['name'], set(prototype['crafting_categories'])))
-
-for prototype in get_prototypes('mining-drill'):
-    machines.add(Machine(prototype['name'], set(prototype['resource_categories'])))
-
-for prototype in get_prototypes('furnace'):
-    machines.add(Machine(prototype['name'], set(prototype['crafting_categories'])))
-
-for prototype in get_prototypes('rocket-silo'):
-    machines.add(Machine(prototype['name'], set(prototype['crafting_categories'])))
-
-machines_available_at_start = {'character'}
+machines_for_manual_craft = {'character'}
 
 
 # Recipes
 recipes = Table()
 recipes_unlocked_at_start: dict[str] = set()
-recipes_mining_with_fluid: dict[str] = set()
-
-for prototype in get_prototypes('asteroid-chunk'):
-    if not 'minable' in prototype:
-        continue
-
-    recipes.add(Recipe(prototype['name'], 'asteroid-chunk', {}, {prototype['minable']['result']: 1}, 0))
-    recipes_unlocked_at_start.add(prototype['name'])
 
 for prototype in get_prototypes('recipe'):
     recipe = Recipe(
         prototype['name'],
         prototype.get('category', 'crafting'),
         {ingredient['name']: ingredient['amount'] for ingredient in prototype.get('ingredients', [])},
-        {result['name']: (result['amount'] if 'amount' in result else (result['amount_min'] + result['amount_max']) / 2) * result.get('probability', 1) + result.get('extra_count_fraction', 0) for result in prototype.get('results', [])},
-        prototype.get("energy_required", 0.5)
+        parse_product_protoype_array(prototype.get('results', [])),
+        prototype.get('energy_required', 0.5)
     )
 
     recipes.add(recipe)
     if prototype.get('enabled', True):
         recipes_unlocked_at_start.add(prototype['name'])
-
-for prototype in get_prototypes('resource'):
-    if 'result' in prototype['minable']:
-        products = {prototype['minable']['result']: 1}
-    elif 'results' in prototype['minable']:
-        products = {result_data['name']: 1 for result_data in prototype['minable']['results']}
-    else:
-        continue
-
-    recipe = Recipe(
-        f'mining-{prototype['name']}',
-        prototype.get('category', 'basic-solid'),
-        {prototype['minable']['required_fluid']: prototype['minable']['fluid_amount']} if 'required_fluid' in prototype['minable'] else {},
-        products,
-        prototype['minable']['mining_time'],
-    )
-
-    recipes.add(recipe)
-    recipes_unlocked_at_start.add(recipe.name)
-
-    if 'required_fluid' in prototype['minable']:
-        recipes_mining_with_fluid.add(recipe.name)
 
 
 # Science packs
@@ -197,8 +233,6 @@ for prototype in get_prototypes('technology'):
                 technology.unlocked_qualities.add(effect['quality'])
             case 'unlock-recipe':
                 technology.unlocked_recipes.add(effect['recipe'])
-            case 'mining-with-fluid':
-                technology.unlocked_recipes.update(recipes_mining_with_fluid)
             case 'unlock-space-location':
                 technology.unlocked_space_locations.add(effect['space_location'])
             case _:
@@ -220,7 +254,3 @@ for prototype in get_prototypes('item'):
     if 'only-in-cursor' in prototype.get('flags', []):
         continue
     items.add(prototype['name'])
-
-
-# Cleanup
-del recipes_mining_with_fluid
