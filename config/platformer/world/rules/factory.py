@@ -1,7 +1,7 @@
 from rule_builder.rules import Has, Rule
 
 from .classes import CanAutomate, CanCraft, UnlockedRecipe
-from .factory_base import get_events_rules as base_get_events_rules, get_locations_rules
+from .factory_base import get_events_rules as base_get_events_rules
 
 
 # Fuel
