@@ -1,18 +1,19 @@
 from random import Random
 
 from ...config import items_required_for_automation, items_required_for_research
-from ...data.raw import science_packs
+from ...data.raw import science_packs, surfaces
 from ...data.utils import craftable_items_at_start
 from ..options import FactorioOptions
+from ..rules.classes import All, Any, CanAutomate, CanCraft, Rule
 from .classes import FactorioCraftLocation, FactorioLocation, FactorioScienceLocation
 from .pool import craftsanity_item_pool, science_location_pools
 
 
-def get_locations(options: FactorioOptions, random: Random, locations_to_create: int) -> list[FactorioLocation]:
+def get_locations(options: FactorioOptions, random: Random, location_count: int) -> list[tuple[FactorioLocation, Rule]]:
     early_craftsanity_count = len(items_required_for_research(options))
     early_science_location_count = len(items_required_for_automation(options))
-    craftsanity_count = min(options.craftsanity.value - early_craftsanity_count, locations_to_create - early_craftsanity_count - early_science_location_count)
-    science_location_count = locations_to_create - early_craftsanity_count - early_science_location_count - craftsanity_count
+    craftsanity_count = min(options.craftsanity.value - early_craftsanity_count, location_count - early_craftsanity_count - early_science_location_count)
+    science_location_count = location_count - early_craftsanity_count - early_science_location_count - craftsanity_count
 
     # Ensure enough early craftsanity location exists
     early_craftsanity_items = random.sample([item_name for item_name in craftsanity_item_pool if item_name in craftable_items_at_start], early_craftsanity_count)
@@ -75,4 +76,19 @@ def get_locations(options: FactorioOptions, random: Random, locations_to_create:
 
     science_locations.sort(key=lambda location: (location.complexity, location.cost))
 
-    return craftsanity_locations + science_locations
+    return [(
+        craftsanity_location,
+        Any([
+            CanCraft(craftsanity_location.item_name, surface.name)
+            for surface in surfaces
+        ])
+    ) for craftsanity_location in craftsanity_locations] + [(
+        science_location,
+        Any([
+            All([
+                CanCraft(item_name, surface.name) if i < early_science_location_count else CanAutomate(item_name, surface.name)
+                for item_name in science_location.ingredients
+            ])
+            for surface in surfaces
+        ])
+    ) for i, science_location in enumerate(science_locations)]

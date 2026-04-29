@@ -67,11 +67,12 @@ class FactorioWorld(World):
 
             self.multiworld.regions.append(region)
 
-        for location in get_locations(self.options, self.random, get_item_count(self.options)):
+        for (location, rule) in get_locations(self.options, self.random, get_item_count(self.options)):
             location.player = self.player
             location.parent_region = menu_region
 
             menu_region.locations.append(location)
+            self.set_rule(location, rule)
 
     def create_items(self) -> None:
         from .items.factory import create_items
@@ -108,12 +109,9 @@ class FactorioWorld(World):
                 self.multiworld.itempool.append(item)
 
     def set_rules(self) -> None:
-        from .rules.factory import get_events_rules, get_locations_rules
+        from .rules.factory import get_events_rules
 
         for location_name, rule in get_events_rules().items():
-            self.set_rule(self.get_location(location_name), rule)
-
-        for location_name, rule in get_locations_rules(self.get_locations()).items():
             self.set_rule(self.get_location(location_name), rule)
 
         match (self.options.goal.get_victory_condition()):
