@@ -1,74 +1,27 @@
 import re
 
-from .classes import Machine, Recipe, Technology
-from .raw import machines, machines_available_at_start, recipes, recipes_unlocked_at_start, space_locations, technologies
-
-
-# Create lookup tables
-_machines_by_category: dict[str, list[Machine]] = {}
-
-for machine in machines:
-    for category in machine.categories:
-        if not category in _machines_by_category:
-            _machines_by_category[category] = list()
-
-        _machines_by_category[category].append(machine)
-
-def machines_by_category(category: str) -> list[Machine]:
-    return _machines_by_category.get(category, [])
-
-
-_recipes_by_product: dict[str, list[Recipe]] = {}
-
-for recipe in recipes:
-    for product in recipe.products.keys():
-        if not product in _recipes_by_product:
-            _recipes_by_product[product] = list()
-
-        _recipes_by_product[product].append(recipe)
-
-def recipes_by_product(product: str) -> list[Recipe]:
-    return _recipes_by_product.get(product, [])
-
-
-_technologies_by_recipe_unlocked: dict[str, list[Technology]] = {}
-_technologies_by_space_location_unlocked: dict[str, list[Technology]] = {}
-
-for technology in technologies:
-    for recipe_name in technology.unlocked_recipes:
-        if not recipe_name in _technologies_by_recipe_unlocked:
-            _technologies_by_recipe_unlocked[recipe_name] = list()
-
-        _technologies_by_recipe_unlocked[recipe_name].append(technology)
-
-    for space_location_name in technology.unlocked_space_locations:
-        if not space_location_name in _technologies_by_space_location_unlocked:
-            _technologies_by_space_location_unlocked[space_location_name] = list()
-
-        _technologies_by_space_location_unlocked[space_location_name].append(technology)
-
-def technologies_by_recipe_unlocked(recipe: str) -> list[Technology]:
-    return _technologies_by_recipe_unlocked.get(recipe, [])
-
-def technologies_by_space_location_unlocked(space_location: str) -> list[Technology]:
-    return _technologies_by_space_location_unlocked.get(space_location, [])
+from .classes import Recipe, Table
+from .raw import machines, machines_for_manual_craft, recipes, recipes_unlocked_at_start, space_locations, technologies
 
 
 # Compute what is realy available
-unlockable_recipes = set()
+unlockable_recipes = Table()
+for recipe_name in recipes_unlocked_at_start:
+    if recipe_name in recipes:
+        unlockable_recipes.add(recipes[recipe_name])
+for technology in technologies:
+    for recipe_name in technology.unlocked_recipes:
+        if recipe_name in recipes:
+            unlockable_recipes.add(recipes[recipe_name])
 
-for recipe in recipes:
-    if recipe.name in recipes_unlocked_at_start or recipe.name in _technologies_by_recipe_unlocked:
-        unlockable_recipes.add(recipe.name)
 
-
-def _get_craftable(recipes: list[Recipe]) -> tuple[set[str], set[str]]:
-    craftable_items: set[str] = set()
-    craftable_recipes: set[str] = set()
+def _get_craftable(recipes: list[Recipe], starting_ressource: list[str]) -> tuple[set[str], Table]:
+    craftable_items: set[str] = set(starting_ressource)
+    craftable_recipes: Table = Table()
     craftable_categories: set[str] = set()
 
-    for machine_name in machines_available_at_start:
-        craftable_categories.update(machines[machine_name].categories)
+    for machine_name in machines_for_manual_craft:
+        craftable_categories.update(machines[machine_name].crafting_categories)
 
     loop = True
     while loop:
@@ -82,32 +35,38 @@ def _get_craftable(recipes: list[Recipe]) -> tuple[set[str], set[str]]:
                 continue
 
             if craftable_items.issuperset(recipe.ingredients.keys()):
-                craftable_recipes.add(recipe.name)
+                craftable_recipes.add(recipe)
 
                 for item_name in recipe.products.keys():
                     craftable_items.add(item_name)
 
                     if item_name in machines:
-                        craftable_categories.update(machines[item_name].categories)
+                        craftable_categories.update(machines[item_name].crafting_categories)
 
                 loop = True
 
     return craftable_items, craftable_recipes
 
 
-craftable_items, craftable_recipes = _get_craftable([recipes[recipe_name] for recipe_name in unlockable_recipes])
+craftable_items, craftable_recipes = _get_craftable(
+    unlockable_recipes,
+    [
+        asteroid_chunk
+        for space_location in space_locations
+        for asteroid_chunk in space_location.asteroid_chunks
+    ],
+)
 
 
-_starting_recipes = []
-for recipe_name in recipes_unlocked_at_start:
-    recipe = recipes[recipe_name]
-
-    if recipe.category == 'asteroid-chunk' and not any(map(lambda space_location: space_location.accessible_at_start and recipe.name in space_location.asteroid_chunks, space_locations)):
-        continue
-
-    _starting_recipes.append(recipe)
-
-craftable_items_at_start, craftable_recipes_at_start = _get_craftable(_starting_recipes)
+craftable_items_at_start, craftable_recipes_at_start = _get_craftable(
+    [recipes[recipe_name] for recipe_name in recipes_unlocked_at_start],
+    [
+        asteroid_chunk
+        for space_location in space_locations
+        if space_location.accessible_at_start
+        for asteroid_chunk in space_location.asteroid_chunks
+    ],
+)
 
 
 # Compute upgrades

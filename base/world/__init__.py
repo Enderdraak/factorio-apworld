@@ -6,12 +6,12 @@ from worlds.AutoWorld import World
 
 from ..config import game_name, progressive_items_with_split_technologies, progressive_items_without_split_technologies, items_required_for_automation, items_required_for_research
 from ..data.raw import science_packs, space_locations, surfaces, surfaces_accessible_at_start, technologies
-from ..data.utils import craftable_recipes
 from .items.classes import FactorioItem
 from .items.ids import item_ids
 from .locations.classes import FactorioCraftLocation, FactorioScienceLocation
 from .locations.ids import location_ids
 from .options import FactorioOptions
+from .productions.event import collect_production_event, create_production_events, FactorioProductionEventItem, remove_production_event
 
 class FactorioWorld(World):
     game = game_name
@@ -43,6 +43,8 @@ class FactorioWorld(World):
     def create_regions(self) -> None:
         from .items.factory import get_item_count
         from .locations.factory import get_locations
+        from .events.factory import get_events
+        from .productions.factory import get_productions
 
         # Menu region holds all locations that are not tied to a specific surface
         menu_region = Region('Menu', self.player, self.multiworld)
@@ -56,16 +58,12 @@ class FactorioWorld(World):
             if surface.name in surfaces_accessible_at_start:
                 menu_region.connect(region)
 
-            for recipe_name in craftable_recipes:
-                region.add_event(f'Automate {recipe_name} on {surface.name}', show_in_spoiler=False)
-                region.add_event(f'Craft {recipe_name} on {surface.name}', show_in_spoiler=False)
-
-            if surface.is_space_platform:
-                for space_location in space_locations:
-                    if not space_location.accessible_at_start:
-                        region.add_event(f'Reach {space_location.name} with {surface.name}', show_in_spoiler=False)
-
             self.multiworld.regions.append(region)
+
+            for (name, rule) in get_events(surface).items():
+                region.add_event(f'{name} on {surface.name}', rule=rule, show_in_spoiler=False)
+
+            create_production_events(self, surface, get_productions(surface))
 
         for (location, rule) in get_locations(self.options, self.random, get_item_count(self.options)):
             location.player = self.player
@@ -109,14 +107,9 @@ class FactorioWorld(World):
                 self.multiworld.itempool.append(item)
 
     def set_rules(self) -> None:
-        from .rules.factory import get_events_rules
-
-        for location_name, rule in get_events_rules().items():
-            self.set_rule(self.get_location(location_name), rule)
-
         match (self.options.goal.get_victory_condition()):
             case {'type': 'reach-space-location', 'space_location': space_location}:
-                self.set_completion_rule(Has(f'Reach {space_location} with space-platform'))
+                self.set_completion_rule(Has(f'Reach {space_location} on space-platform'))
             case {'type': 'launch-rocket'}:
                 self.set_completion_rule(Has(f'Automate rocket-part on nauvis'))
             case _:
@@ -141,6 +134,9 @@ class FactorioWorld(World):
         return self.random.choice(filler_item_pool)
 
     def collect(self, state: CollectionState, item: Item) -> bool:
+        if isinstance(item, FactorioProductionEventItem):
+            return collect_production_event(self, state, item)
+
         if super().collect(state, item):
             if item.name in self.progressive_items:
                 current_count = state.prog_items[self.player][item.name]
@@ -152,6 +148,9 @@ class FactorioWorld(World):
         return False
 
     def remove(self, state: CollectionState, item: Item) -> bool:
+        if isinstance(item, FactorioProductionEventItem):
+            return remove_production_event(self, state, item)
+
         if super().remove(state, item):
             if item.name in self.progressive_items:
                 current_count = state.prog_items[self.player][item.name]

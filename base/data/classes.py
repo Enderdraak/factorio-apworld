@@ -12,6 +12,13 @@ class Base:
         return hash(self.name)
 
 
+def get_name(value: Base|str) -> str:
+    if isinstance(value, Base):
+        return value.name
+    else:
+        return value
+
+
 class Table:
     data: dict[str, Base]
 
@@ -38,8 +45,34 @@ class Table:
 
 
 @dataclasses.dataclass
+class Resource:
+    name: str
+
+
+@dataclasses.dataclass
+class PumpableResource(Resource):
+    '''Resources that can be pumped by an offshore pump (ex: water)'''
+    fluid: str
+
+
+@dataclasses.dataclass
+class GatherableResource(Resource):
+    '''Resources that can be gathered by the character (ex: rocks)'''
+    results: dict[str, int|float]
+
+
+@dataclasses.dataclass
+class MinableResource(Resource):
+    '''Ressurces that can be mined by a mining drill (ex: iron)'''
+    category: str
+    results: dict[str, int|float]
+    mining_fluid: str|None = None
+
+
+@dataclasses.dataclass
 class Surface(Base):
     properties: dict[str, float]
+    resources: list[Resource] = dataclasses.field(default_factory=list)
 
     @property
     def is_space_platform(self) -> bool:
@@ -72,15 +105,14 @@ class SurfaceCondition:
 
         return True
 
-    @classmethod
-    def from_data(cls, data):
-        return cls(data['property'], data.get('min'), data.get('max'))
-
 
 @dataclasses.dataclass
 class Machine(Base):
-    categories: set[str]
     surface_conditions: list[SurfaceCondition] = dataclasses.field(default_factory=list)
+    crafting_categories: set[str] = dataclasses.field(default_factory=set)
+    mining_categories: set[str] = dataclasses.field(default_factory=set)
+    is_offshore_pump: bool = False
+    is_asteroid_collector: bool = False
 
     def can_be_placed_on(self, surface: Surface) -> bool:
         return all(map(lambda surface_condition: surface_condition.accept(surface), self.surface_conditions))

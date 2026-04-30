@@ -4,7 +4,7 @@ from ...config import items_required_for_automation, items_required_for_research
 from ...data.raw import science_packs, surfaces
 from ...data.utils import craftable_items_at_start
 from ..options import FactorioOptions
-from ..rules.classes import All, Any, CanAutomate, CanCraft, Rule
+from ..rules import All, Any, CanAutomate, CanCraft, Rule
 from .classes import FactorioCraftLocation, FactorioLocation, FactorioScienceLocation
 from .pool import craftsanity_item_pool, science_location_pools
 
@@ -79,14 +79,14 @@ def get_locations(options: FactorioOptions, random: Random, location_count: int)
     return [(
         craftsanity_location,
         Any([
-            CanCraft(craftsanity_location.item_name, surface.name)
+            CanCraft(craftsanity_location.item_name, surface)
             for surface in surfaces
         ])
     ) for craftsanity_location in craftsanity_locations] + [(
         science_location,
         Any([
             All([
-                CanCraft(item_name, surface.name) if i < early_science_location_count else CanAutomate(item_name, surface.name)
+                CanCraft(item_name, surface) if i < early_science_location_count else CanAutomate(item_name, surface)
                 for item_name in science_location.ingredients
             ])
             for surface in surfaces
