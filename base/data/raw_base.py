@@ -74,19 +74,31 @@ for prototype in get_prototypes('surface'):
 for prototype in get_prototypes('planet'):
     resources = []
 
-    for tile_name in prototype['map_gen_settings']['autoplace_settings']['tile']['settings'].keys():
-        tile_data = get_prototype('tile', tile_name)
+    autoplace_controls = prototype['map_gen_settings']['autoplace_controls']
+    autoplace_settings = prototype['map_gen_settings']['autoplace_settings']
+
+    for tile_data in get_prototypes('tile'):
+        autoplace = autoplace_settings['tile']['settings'].get(tile_data['name'], autoplace_controls.get(tile_data.get('autoplace', {}).get('control')))
+
+        if autoplace is None:
+            continue
+
+        tile_name = tile_data['name']
         tile_fluid = tile_data.get('fluid')
 
         if tile_fluid is not None:
             resources.append(PumpableResource(tile_name, tile_fluid))
 
-    for entity_name in prototype['map_gen_settings']['autoplace_settings']['entity']['settings'].keys():
-        entity_data = get_prototype('entity', entity_name)
+    for entity_data in get_prototypes('entity'):
+        autoplace = autoplace_settings['entity']['settings'].get(entity_data['name'], autoplace_controls.get(entity_data.get('autoplace', {}).get('control')))
+
+        if autoplace is None:
+            continue
 
         if 'minable' not in entity_data:
             continue
 
+        entity_name = entity_data['name']
         minable_data = entity_data['minable']
 
         if 'results' in minable_data:
