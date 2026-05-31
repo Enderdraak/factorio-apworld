@@ -10,4 +10,4 @@ for i, pack in enumerate(science_packs, start=1):
     prefix: str = f"AP-{i}-"
     science_location_pools[pack] = [prefix + str(x).upper().zfill(3) for x in range(1, max_needed + 1)]
 
-craftsanity_item_pool = [item_name for item_name in craftable_items if item_name not in science_packs and craftsanity_filter(item_name)]
+craftsanity_item_pool = sorted([item_name for item_name in craftable_items if item_name not in science_packs and craftsanity_filter(item_name)])
